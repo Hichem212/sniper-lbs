@@ -1,26 +1,28 @@
-# Ignorer le dossier de l'environnement virtuel
+# --- Fichiers Système & Environnement ---
+.DS_Store
 venv/
 bot/venv/
 bin/
 obj/
+__pycache__/
+*.py[cod]
 
-# Ignorer la base de données et ses fichiers temporaires
+# --- Base de données & Logs ---
 *.db
 *.db-wal
 *.db-shm
+*.log
 voitures.db
 
-# Ignorer les fichiers de logs ou système
-*.log
-.DS_Store
+# --- SÉCURITÉ (Ce qui ne doit JAMAIS partir sur GitHub) ---
 
-# --- Sécurité ---
-# Ignorer le fichier de configuration avec les clés réelles
+# 1. Configuration Go (Clés API Gemini/Discord)
 config/config.go
 
-# Ignorer les logs locaux
-*.log
+# 2. Configuration Python (Token Discord)
+bot/.env
+.env
 
-# Ignorer les données personnelles du bot Python
+# 3. Données utilisateurs & Alertes (Vie privée)
 bot/alerts.json
 bot/users.db
