@@ -13,3 +13,14 @@ voitures.db
 # Ignorer les fichiers de logs ou système
 *.log
 .DS_Store
+
+# --- Sécurité ---
+# Ignorer le fichier de configuration avec les clés réelles
+config/config.go
+
+# Ignorer les logs locaux
+*.log
+
+# Ignorer les données personnelles du bot Python
+bot/alerts.json
+bot/users.db
