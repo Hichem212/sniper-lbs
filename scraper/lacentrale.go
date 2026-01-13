@@ -23,6 +23,8 @@ import (
 // ⬇️ ⬇️ COLLE TON COOKIE GÉANT ENTRE LES GUILLEMETS ICI ⬇️ ⬇️
 const CONST_COOKIE = "datadome=.............; _ga=............."
 
+/*Fonction a modifier quand on aura assez a une ip dynamique */
+
 func LancerLC() {
 	// On utilise Chrome 120 pour correspondre aux headers
 	profil := profiles.Chrome_120
@@ -157,7 +159,7 @@ func scanPageLC(client tls_client.HttpClient) {
 		kmDisp := fmt.Sprintf("%d km", kmInt)
 		desc := fmt.Sprintf("**Prix:** %d €\n**Année:** %d\n**Km:** %s\n⛽ %s\n\n%s", prixInt, anneeInt, kmDisp, carburant, analyse)
 
-		discord.Envoyer(prixInt, "🔵 "+titre, desc, lien, s.Find("img").AttrOr("src", ""), coul, "LaCentrale • "+source)
+		discord.Envoyer(cote, prixInt, "🔵 "+titre, desc, lien, s.Find("img").AttrOr("src", ""), coul, "LaCentrale • "+source)
 		database.InsertAnnonce(id, "LaCentrale", titre, prixInt, anneeInt, kmInt, carburant, "France", cote, lien, s.Find("img").AttrOr("src", ""))
 
 		fmt.Printf("🔵 LC | %s | %d€\n", titre, prixInt)

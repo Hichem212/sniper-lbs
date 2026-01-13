@@ -55,7 +55,7 @@ func gestionFluxGratuit() {
 				prefix = "🔵"
 			}
 
-			desc := fmt.Sprintf("**Prix:** %d €\n**Année:** %d\n**Km:** %d km\n⛽ %s\n📍 %s\nSource: %s", prix, annee, km, carburant, ville, site)
+			desc := fmt.Sprintf("**Prix:** %d €\n**Année:** %d\n**Km:** %d km\n⛽ %s\n📍 %s\n", prix, annee, km, carburant, ville)
 			discord.EnvoyerGratuit(config.WB_GRATUIT, prefix+" "+titre, desc, url, image)
 
 			// On update en fonction de l'ID ET du SITE
