@@ -221,7 +221,18 @@ func scanPageAS(client tls_client.HttpClient) {
 
 		// 3. SUITE DU TRAITEMENT...
 		carburant := detectCarbAS(texteComplet)
-		ville := "France"
+
+		ville := s.Find("span[class*='ListItemSeller_address']").Text()
+		if ville == "" {
+			ville = "France"
+		} else {
+			// Nettoyage: "FR-69000 Lyon" -> "Lyon" (Approximation)
+			ville = strings.TrimPrefix(ville, "FR-")
+			parts := strings.Fields(ville)
+			if len(parts) > 1 {
+				ville = strings.Join(parts[1:], " ") // Enlève le code postal souvent au début
+			}
+		}
 
 		// Image URL (On l'a déjà peut-être récupérée pour l'ID)
 		imageURL := s.Find("img").AttrOr("src", "")
