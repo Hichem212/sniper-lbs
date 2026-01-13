@@ -1,0 +1,15 @@
+# Ignorer le dossier de l'environnement virtuel
+venv/
+bot/venv/
+bin/
+obj/
+
+# Ignorer la base de données et ses fichiers temporaires
+*.db
+*.db-wal
+*.db-shm
+voitures.db
+
+# Ignorer les fichiers de logs ou système
+*.log
+.DS_Store
