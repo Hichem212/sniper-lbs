@@ -57,12 +57,11 @@ type DiscordButton struct {
 
 // --- FONCTION D'ENVOI INTELLIGENTE ---
 // On garde EXACTEMENT la même signature qu'avant pour ne rien casser
+// --- FONCTION D'ENVOI INTELLIGENTE (Design Pro + Filtrage Admin) ---
+// --- FONCTION D'ENVOI GO (Design Vinted + Sécurité Admin) ---
 func Envoyer(cote, prix int, titre, desc, lien, img string, couleur int, source string) {
 
-	// 1. EXTRACTION DES DONNÉES (Parsing)
-	// Puisqu'on reçoit tout dans "desc", on va aller pêcher les infos nous-mêmes
-	// Format reçu habituel : "🗓️ **Année :** 2018"
-
+	// 1. PARSING (Extraction des infos du texte brut)
 	reAnnee := regexp.MustCompile(`Année :[*\s]+(\d+)`)
 	reKm := regexp.MustCompile(`Km :[*\s]+(\d+)`)
 	reCarb := regexp.MustCompile(`Énergie :[*\s]+([^\n]+)`)
@@ -86,64 +85,91 @@ func Envoyer(cote, prix int, titre, desc, lien, img string, couleur int, source 
 		ville = strings.TrimSpace(m[1])
 	}
 
-	// 2. ANALYSE FINANCIÈRE (Recalculée pour être sûr d'avoir le bon code couleur)
+	// 2. LOGIQUE DE ROUTAGE & COULEURS
 	marge := 0.0
+	webhook := "" // Vide par défaut
+
+	finalColor := couleur // Couleur de base du site (gris/orange/bleu)
 	iconEtat := "🚗"
 	analyseTxt := "⚖️ **Prix de marché** (Standard)"
 
-	webhook := config.WB_LUXE // Par défaut
-	finalColor := couleur     // On part sur la couleur donnée par le scraper
-
+	// --- DÉBUT DE L'ANALYSE ---
 	if cote > 0 {
 		marge = (float64(cote-prix) / float64(cote)) * 100
 		gain := cote - prix
 
+		// 🔒 CAS 1 : PÉPITE (> 20%) -> ADMIN SEULEMENT
 		if marge >= 20 {
 			webhook = config.WB_ADMIN
-			finalColor = 15844367 // OR (Gold) -> Super affaire
+			finalColor = 15844367 // OR (Gold)
 			iconEtat = "🔥"
-			analyseTxt = fmt.Sprintf("🚀 **EXCELLENTE AFFAIRE**\n📉 Cote: %d €\n💰 **Gain: %d €** (+%.0f%%)", cote, gain, marge)
-		} else if marge >= 10 {
-			finalColor = 3066993 // VERT
-			iconEtat = "✅"
-			analyseTxt = fmt.Sprintf("✅ **TRÈS BON PRIX**\n📉 Cote: %d €\n💸 Gain: %d €", cote, gain)
-		} else if marge <= -10 {
-			finalColor = 15158332 // ROUGE
-			iconEtat = "⚠️"
-			analyseTxt = fmt.Sprintf("⚠️ **Au-dessus de la cote**\n📉 Cote: %d €\n❌ Surcoût: %d €", cote, prix-cote)
-		}
-	}
+			analyseTxt = fmt.Sprintf("🔒 **CONFIDENTIEL (Marge > 20%%)**\n📉 Cote: %d €\n💰 **Gain: %d €** (+%.0f%%)", cote, gain, marge)
 
-	// Routage Webhook (Budget)
-	if marge < 20 {
+			// 🔒 CAS 2 : LUXE RENTABLE (> 40k & > 10%) -> ADMIN SEULEMENT
+		} else if prix >= 40000 && marge >= 10 {
+			webhook = config.WB_ADMIN
+			finalColor = 10181046 // VIOLET (Luxe)
+			iconEtat = "💎"
+			analyseTxt = fmt.Sprintf("🔒 **GROS COUP LUXE**\n📉 Cote: %d €\n💸 **Gain: %d €** (+%.0f%%)", cote, gain, marge)
+
+			// 📢 CAS 3 : PUBLIC (Offres classiques)
+		} else {
+			// Définition de la couleur et du texte pour le public
+			if marge >= 10 {
+				finalColor = 3066993 // VERT
+				iconEtat = "✅"
+				analyseTxt = fmt.Sprintf("✅ **TRÈS BON PRIX**\n📉 Cote: %d €\n💸 Gain: %d €", cote, gain)
+			} else if marge <= -10 {
+				finalColor = 15158332 // ROUGE
+				iconEtat = "⚠️"
+				analyseTxt = fmt.Sprintf("⚠️ **Au-dessus de la cote**\n📉 Cote: %d €\n❌ Surcoût: %d €", cote, prix-cote)
+			}
+
+			// Choix du salon public selon le budget
+			if prix <= 10000 {
+				webhook = config.WB_0_10K
+			} else if prix <= 20000 {
+				webhook = config.WB_10_20K
+			} else if prix <= 30000 {
+				webhook = config.WB_20_30K
+			} else if prix <= 50000 {
+				webhook = config.WB_30_50K
+			}
+		}
+	} else {
+		// Pas de cote -> Routage simple par prix vers le public
 		if prix <= 10000 {
 			webhook = config.WB_0_10K
-		} else if prix <= 20000 {
+		}
+		if prix <= 20000 {
 			webhook = config.WB_10_20K
-		} else if prix <= 30000 {
+		}
+		if prix <= 30000 {
 			webhook = config.WB_20_30K
-		} else if prix <= 50000 {
+		}
+		if prix <= 50000 {
 			webhook = config.WB_30_50K
 		}
 	}
 
+	// Si aucun webhook valide n'est trouvé, on arrête
 	if webhook == "" || strings.Contains(webhook, "WEBHOOK_") {
 		return
 	}
 
-	// 3. CONSTRUCTION DU VISUEL "VINTED / PRO"
+	// 3. CONSTRUCTION DU DESIGN "VINTED"
 
-	// Nettoyage source (Enlever "Argus Expert B...")
+	// Nettoyage de la source
 	sourceClean := strings.Split(source, "(")[0]
 	sourceClean = strings.TrimSpace(sourceClean)
 
-	// Ligne 1 : Caractéristiques Clés
+	// Ligne 1 : Les chiffres (Prix • Année • Km)
 	infosLigne := fmt.Sprintf("**%d €** • %s • %s km", prix, annee, km)
 
-	// Ligne 2 : Détails
+	// Ligne 2 : Les détails (Carburant | Ville)
 	detailsLigne := fmt.Sprintf("⛽ %s   |   📍 %s", carburant, ville)
 
-	// Création des Champs (Fields)
+	// Création des champs (Fields)
 	fields := []DiscordField{
 		{
 			Name:   "🏁 Caractéristiques",
@@ -157,7 +183,7 @@ func Envoyer(cote, prix int, titre, desc, lien, img string, couleur int, source 
 		},
 	}
 
-	// Ajout du bloc Analyse si cote dispo
+	// Ajout de l'analyse seulement si pertinente
 	if cote > 0 {
 		fields = append(fields, DiscordField{
 			Name:   "📊 Analyse Financière",
@@ -169,12 +195,12 @@ func Envoyer(cote, prix int, titre, desc, lien, img string, couleur int, source 
 	// 4. PAYLOAD FINAL
 	payload := DiscordMessage{
 		Embeds: []DiscordEmbed{{
-			Title:  fmt.Sprintf("%s %s", iconEtat, titre),
-			URL:    lien,
-			Color:  finalColor,
-			Fields: fields, // On utilise nos jolis champs ici
-			Image:  DiscordImage{URL: img},
-			//Footer:    DiscordFooter{Text: "Sniper Auto • " + sourceClean},
+			Title:     fmt.Sprintf("%s %s", iconEtat, titre),
+			URL:       lien,
+			Color:     finalColor,
+			Fields:    fields,
+			Image:     DiscordImage{URL: img},
+			Footer:    DiscordFooter{Text: "Sniper Auto • " + sourceClean},
 			Timestamp: time.Now().Format(time.RFC3339),
 		}},
 		Components: []DiscordComponent{{

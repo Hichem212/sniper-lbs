@@ -1,0 +1,6 @@
+!vip @pseudo 1s
+!vip @pseudo 1m
+
+!clean -> pour nettoyer
+!fermer  -> pour fermer un salon 
+!aide -> pour avoir de l'aide sur les commandes
