@@ -179,7 +179,7 @@ func getComparables(pattern string, annee, km int, carb string) []Comparable {
         WHERE titre LIKE ? AND carburant = ? 
         AND annee BETWEEN ? AND ? AND km BETWEEN ? AND ?
         AND prix > 1500
-        AND date_creation > datetime('now', '-90 days')
+        AND date_creation > datetime('now', '-180 days')
     `
 	rows, err := database.DB.Query(query, pattern, carb, minAnnee, maxAnnee, minKm, maxKm)
 	if err != nil {

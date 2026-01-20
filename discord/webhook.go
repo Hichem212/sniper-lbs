@@ -195,12 +195,12 @@ func Envoyer(cote, prix int, titre, desc, lien, img string, couleur int, source 
 	// 4. PAYLOAD FINAL
 	payload := DiscordMessage{
 		Embeds: []DiscordEmbed{{
-			Title:     fmt.Sprintf("%s %s", iconEtat, titre),
-			URL:       lien,
-			Color:     finalColor,
-			Fields:    fields,
-			Image:     DiscordImage{URL: img},
-			Footer:    DiscordFooter{Text: "Sniper Auto • " + sourceClean},
+			Title:  fmt.Sprintf("%s %s", iconEtat, titre),
+			URL:    lien,
+			Color:  finalColor,
+			Fields: fields,
+			Image:  DiscordImage{URL: img},
+			//Footer:    DiscordFooter{Text: "Sniper Auto • " + sourceClean},
 			Timestamp: time.Now().Format(time.RFC3339),
 		}},
 		Components: []DiscordComponent{{

@@ -4,3 +4,29 @@
 !clean -> pour nettoyer
 !fermer  -> pour fermer un salon 
 !aide -> pour avoir de l'aide sur les commandes
+
+setup_ticket
+
+setup_regles
+
+TOKEN = "MTQ1OTY1MDA4NTE1ODY1NDA2Nw.G7c6sj.X2alsUmxTpkYm12y_icFCg2vV-eyScTZobBHdc"
+
+ID_ROLE_MEMBRE = 1459646911911952395   
+ID_ROLE_ADMIN = 1459646971848429568   
+ID_ROLE_VIP = 1459646759822299359 
+ID_CATEGORIE_TICKET = 1459648758789968046 
+ID_CATEGORIE_ALERTES = 1459892939001036820
+ID_SALON_TARIF = 1460731025708810327
+ID_SALON_GENERAL = 1459593587741163616
+ID_SALON_CCM = 1460737957156880531
+ID_SALON_CMD = 1459974027836784827
+
+# Seuils de sécurité
+
+ALERT_LOCK = asyncio.Lock()
+
+# Chemins de fichiers
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, '..', 'voitures.db') 
+FICHIER_ALERTES = os.path.join(BASE_DIR, 'alerts.json')
+FICHIER_VIP = os.path.join(BASE_DIR, 'vips.json')

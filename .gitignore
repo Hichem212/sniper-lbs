@@ -26,5 +26,7 @@ bot/.env
 # 3. Données utilisateurs & Alertes (Vie privée)
 bot/alerts.json
 bot/users.db
+bot/vips.json
+bot/alerts.json
 
-bot/bot.py
+
