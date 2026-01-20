@@ -14,30 +14,33 @@ from dotenv import load_dotenv
 # ⚙️ CONFIGURATION
 # ==========================================
 
-# ⚠️ REMPLACE CECI PAR UN FICHIER .ENV EN PROD
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
-DB_NAME = "voitures.db"
+# CORRECTION 1 : Chemin absolu vers la DB (Dossier parent)
+# Cela permet de trouver la DB créée par les scrapers Go à la racine
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(BASE_DIR, "..", "voitures.db")
 
+# CORRECTION 2 : Fonction pour convertir les IDs du .env en Entiers (Int)
 def get_id(name):
     val = os.getenv(name)
     if not val:
         print(f"⚠️ ATTENTION : La variable {name} est vide dans le fichier .env")
         return 0
-    return int(val)
-# IDs (À vérifier avec tes propres IDs Discord)
+    # On nettoie la chaîne au cas où il y ait des espaces et on convertit
+    return int(val.strip())
 
-
-ID_ROLE_MEMBRE = get_id("ID_ROLE_MEMBRE")   #id salon pour les membres 
-ID_ROLE_ADMIN = get_id("ID_ROLE_ADMIN")   #id salon pour les admin
-ID_ROLE_VIP = get_id("ID_ROLE_VIP")  #id salon pour les vips
-ID_CATEGORIE_TICKET = get_id("ID_CATEGORIE_TICKET") #id du salon pour les tickets
-ID_CATEGORIE_ALERTES = get_id("ID_CATEGORIE_ALERTES") #id du salon pour les alertes
-ID_SALON_TARIF = get_id("ID_SALON_TARIF") #id_salon tarif 
-ID_SALON_GENERAL = get_id("ID_SALON_GENERAL") #id_salon general 
-ID_SALON_CCM = get_id("ID_SALON_CCM") #id_salon comment ça marche
-ID_SALON_CMD = get_id("ID_SALON_CMD") #id salon commande
+# Récupération des IDs avec conversion automatique
+ID_ROLE_MEMBRE = get_id("ID_ROLE_MEMBRE")   
+ID_ROLE_ADMIN = get_id("ID_ROLE_ADMIN")   
+ID_ROLE_VIP = get_id("ID_ROLE_VIP") 
+ID_CATEGORIE_TICKET = get_id("ID_CATEGORIE_TICKET") 
+ID_CATEGORIE_ALERTES = get_id("ID_CATEGORIE_ALERTES")
+ID_SALON_TARIF = get_id("ID_SALON_TARIF")
+ID_SALON_GENERAL = get_id("ID_SALON_GENERAL")
+ID_SALON_CCM = get_id("ID_SALON_CCM")
+ID_SALON_CMD = get_id("ID_SALON_CMD")
 
 # ==========================================
 # 🧠 CLASSES DE DONNÉES
@@ -95,7 +98,7 @@ class DatabaseManager:
                     date_creation TIMESTAMP
                 )
             """)
-            # Table VIPs (Remplace vips.json)
+            # Table VIPs
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS vips (
                     user_id INTEGER PRIMARY KEY,
@@ -133,7 +136,6 @@ class DatabaseManager:
     # --- VIPS ---
     async def add_vip(self, user_id, date_fin):
         async with aiosqlite.connect(self.db_name) as db:
-            # REPLACE INTO permet d'écraser l'ancien abonnement si le membre reprend un VIP
             await db.execute("REPLACE INTO vips (user_id, date_fin) VALUES (?, ?)", (user_id, date_fin))
             await db.commit()
 
@@ -159,13 +161,18 @@ class DatabaseManager:
                 cars = []
                 for row in rows:
                     try:
+                        # Sécurisation : on vérifie si la colonne estimation_ia existe ou on met 0
+                        cote_val = row['estimation_ia'] if 'estimation_ia' in row.keys() else 0
+                        
                         cars.append(CarOffer(
                             id=row['id'], titre=row['titre'], prix=row['prix'], 
                             annee=row['annee'], km=row['km'], carburant=row['carburant'], 
-                            ville=row['ville'], cote=row['estimation_ia'],
+                            ville=row['ville'], cote=cote_val,
                             url=row['url'], image_url=row['image'], date_creation=row['date_creation']
                         ))
-                    except: continue
+                    except Exception as e:
+                        # print(f"Erreur mapping annonce : {e}")
+                        continue
                 return cars
 
 db_manager = DatabaseManager(DB_NAME)
@@ -228,10 +235,17 @@ class SniperBot(commands.Bot):
 
     async def setup_hook(self):
         await db_manager.init_db()
-        # On ajoute les vues persistantes pour qu'elles marchent après reboot
         self.add_view(TicketView())
         self.add_view(ReglesView())
-        await self.tree.sync()
+        
+        # Synchronisation globale des commandes (peut prendre jusqu'à 1h)
+        # Pour tester immédiatement, tu peux synchroniser uniquement sur ton serveur :
+        MY_GUILD = discord.Object(id=1459593586772283415)
+        self.tree.copy_global_to(guild=MY_GUILD)
+        await self.tree.sync(guild=MY_GUILD)
+        
+        #await self.tree.sync()
+        
         print("✅ Système prêt.")
         self.scanner_task.start()
         self.check_vip_expiration.start()
@@ -241,7 +255,7 @@ class SniperBot(commands.Bot):
         try:
             nouvelles_annonces = await db_manager.get_recent_cars(self.last_scan)
             if nouvelles_annonces:
-                print(f"🔍 {len(nouvelles_annonces)} nouvelles annonces.")
+                print(f"🔍 {len(nouvelles_annonces)} nouvelles annonces détectées.")
                 active_alerts = await db_manager.get_active_alerts()
                 for voiture in nouvelles_annonces:
                     await self.dispatch_alert(voiture, active_alerts)
@@ -251,12 +265,12 @@ class SniperBot(commands.Bot):
 
     @tasks.loop(minutes=60)
     async def check_vip_expiration(self):
-        """ Vérifie les VIPs expirés toutes les heures """
         try:
             expired_vips = await db_manager.get_expired_vips()
             if not expired_vips: return
             
-            guild = self.get_guild(self.guilds[0].id) if self.guilds else None
+            # Récupère le premier serveur disponible (ou spécifie l'ID si besoin)
+            guild = self.guilds[0] if self.guilds else None
             if not guild: return
             
             role_vip = guild.get_role(ID_ROLE_VIP)
@@ -267,19 +281,19 @@ class SniperBot(commands.Bot):
                 if member and role_vip:
                     await member.remove_roles(role_vip)
                     print(f"📉 VIP expiré retiré pour {member.name}")
-                
-                # On retire de la DB
                 await db_manager.remove_vip(user_id)
         except Exception as e:
             print(f"❌ Erreur VIP Check: {e}")
 
     async def dispatch_alert(self, voiture: CarOffer, alerts):
         for alert in alerts:
+            # Filtres
             if alert['keyword'] and alert['keyword'].lower() not in voiture.titre.lower(): continue
             if alert['max_price'] and voiture.prix > alert['max_price']: continue
             if alert['min_year'] and voiture.annee < alert['min_year']: continue
             if alert['max_km'] and voiture.km > alert['max_km']: continue
             
+            # Filtre Ville (avec Regex pour code postal)
             if alert['ville']:
                 v_car = voiture.ville.lower() if voiture.ville else ""
                 v_alert = alert['ville'].lower()
@@ -315,6 +329,7 @@ class SniperBot(commands.Bot):
         if voiture.cote > 0:
             embed.add_field(name="Rentabilité", value=f"📉 Cote: {voiture.cote}€\n💰 Marge: **{int(voiture.marge)}%**", inline=True)
         if voiture.image_url: embed.set_image(url=voiture.image_url)
+        
         view = discord.ui.View()
         view.add_item(discord.ui.Button(label="Voir l'annonce", url=voiture.url))
         await channel.send(embed=embed, view=view)
@@ -322,16 +337,16 @@ class SniperBot(commands.Bot):
 bot = SniperBot()
 
 # ==========================================
-# 🎮 COMMANDES (ANCIENNES + SLASH)
+# 🎮 COMMANDES (SLASH & CLASSIQUES)
 # ==========================================
 
-# 1. ALERTES (Slash Command - Moderne)
 @bot.tree.command(name="alerte", description="Créer une alerte personnalisée")
 @app_commands.describe(mots_cles="Ex: Clio 4 RS", prix_max="Prix Max €", ville="Ville ou Dept (69)")
 async def alerte(interaction: discord.Interaction, mots_cles: str, prix_max: Optional[int], annee_min: Optional[int], km_max: Optional[int], ville: Optional[str]):
     guild = interaction.guild
     categorie = discord.utils.get(guild.categories, id=ID_CATEGORIE_ALERTES)
-    if not categorie: return await interaction.response.send_message("❌ Erreur Catégorie.", ephemeral=True)
+    if not categorie: 
+        return await interaction.response.send_message("❌ Erreur : Catégorie Alertes introuvable.", ephemeral=True)
 
     safe_name = f"recherche-{interaction.user.name}"[:25].lower().replace(" ", "-")
     overwrites = {
@@ -341,33 +356,69 @@ async def alerte(interaction: discord.Interaction, mots_cles: str, prix_max: Opt
     }
 
     try:
+        # 1. Création du salon et de l'alerte
         channel = await guild.create_text_channel(name=safe_name, category=categorie, overwrites=overwrites)
         await db_manager.add_alert(interaction.user.id, channel.id, mots_cles, prix_max, annee_min, km_max, ville)
+        
         await interaction.response.send_message(f"✅ Salon créé : {channel.mention}", ephemeral=True)
         await channel.send(f"👋 Bienvenue {interaction.user.mention} ! Scan en cours...", view=DeleteAlertView(channel.id))
-    except Exception as e:
-        await interaction.response.send_message(f"❌ Erreur: {e}", ephemeral=True)
 
-# 2. MES ALERTES (Ancienne commande remise)
+        # ---------------------------------------------------------------
+        # ⚡ 2. SCAN IMMÉDIAT (RÉTROACTIF 48H)
+        # ---------------------------------------------------------------
+        await channel.send("⏳ **Analyse de l'historique (48h)...**")
+        
+        # On récupère tout ce qui est récent (-2 jours)
+        historique = await db_manager.get_recent_cars(datetime.now() - timedelta(hours=48))
+        
+        count_found = 0
+        if historique:
+            for voiture in historique:
+                # --- FILTRAGE PYTHON (Copie de la logique dispatch_alert) ---
+                if mots_cles and mots_cles.lower() not in voiture.titre.lower(): continue
+                if prix_max and voiture.prix > prix_max: continue
+                if annee_min and voiture.annee < annee_min: continue
+                if km_max and voiture.km > km_max: continue
+                
+                if ville:
+                    v_car = voiture.ville.lower() if voiture.ville else ""
+                    v_alert = ville.lower()
+                    if v_alert.isdigit() and len(v_alert) <= 3:
+                        match = re.search(r'\b(\d{5})\b', v_car)
+                        if match and not match.group(1).startswith(v_alert): continue
+                        elif not match and v_alert not in v_car: continue
+                    elif v_alert not in v_car: continue
+
+                # --- ENVOI ---
+                await bot.safe_send(channel, voiture)
+                count_found += 1
+
+        if count_found == 0:
+            await channel.send("🚫 Rien dans l'historique récent. Je guette les nouvelles annonces ! 👀")
+        else:
+            await channel.send(f"✅ **{count_found} annonces trouvées dans l'historique !** Passage en surveillance temps réel...")
+
+    except Exception as e:
+        # Si l'interaction a déjà répondu, on utilise followup
+        if interaction.response.is_done():
+             await interaction.followup.send(f"❌ Erreur: {e}", ephemeral=True)
+        else:
+             await interaction.response.send_message(f"❌ Erreur: {e}", ephemeral=True)
 @bot.command()
 async def mes_alertes(ctx):
-    """ Affiche vos alertes actives """
     if ctx.channel.id != ID_SALON_CMD: return
-    
     alerts = await db_manager.get_user_alerts(ctx.author.id)
     if not alerts: return await ctx.send("❌ Aucune alerte active.")
-    
     msg = "**📋 Tes Alertes :**\n"
     for row in alerts:
         msg += f"• {row['keyword']} (<#{row['channel_id']}>)\n"
     await ctx.send(msg)
 
-# 3. AIDE & TARIF & SETUP (Anciennes commandes remises)
 @bot.command()
 async def aide(ctx):
     if ctx.channel.id not in [ID_SALON_CCM, ID_SALON_GENERAL, ID_SALON_CMD]: return
     embed = discord.Embed(title="🕵️ Guide du Chasseur", color=0x00ff00)
-    embed.add_field(name="🚀 Créer une alerte", value="Utilise la commande `/alerte`", inline=False)
+    embed.add_field(name="🚀 Créer une alerte", value="Utilise la commande '''/alerte'''", inline=False)
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -391,7 +442,6 @@ async def setup_regles(ctx):
     embed = discord.Embed(title="📜 RÈGLEMENT", description="Respect • Pas de spam • Responsabilité", color=0x2ecc71)
     await ctx.send(embed=embed, view=ReglesView())
 
-# 4. ADMINISTRATION (CLEAN, FERMER, VIP)
 @bot.command()
 @commands.has_permissions(manage_messages=True)
 async def clean(ctx, limit: int = None):
@@ -420,15 +470,10 @@ async def vip(ctx, membre: discord.Member, duree: str):
 
     try: 
         await membre.add_roles(role_vip)
-        # SAUVEGARDE EN BDD (Plus de JSON !)
         await db_manager.add_vip(membre.id, date_fin)
         await ctx.send(f"💎 VIP activé pour {membre.mention} jusqu'au {date_fin.strftime('%d/%m/%Y')}")
     except Exception as e: 
         await ctx.send(f"❌ Erreur: {e}")
-
-# ==========================================
-# 🚀 DÉMARRAGE
-# ==========================================
 
 @bot.event
 async def on_ready():
